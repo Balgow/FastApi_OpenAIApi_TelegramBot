@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+pydantic
+openai
+sqlalchemy
+psycopg2
+requests
+asyncpg
+pyTelegramBotAPI
+httpx

@@ -1,0 +1,15 @@
+version: '3'
+
+services:
+  app:
+    image: ${IMAGE_APP_TAG}
+    environment:
+      - TELEGRAM_API_KEY={TELEGRAM_API_KEY}
+      - OPENAI_API_KEY={OPENAI_API_KEY}
+      - DOMEN=srv84.ifxdb.com:8113
+    networks:
+      - meeting-arranger-bot-prod
+    restart: always
+
+networks:
+  meeting-arranger-bot-prod:

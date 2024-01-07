@@ -1,0 +1,3 @@
+DOMEN =  ''
+
+FIRST_MESSAGE = ''

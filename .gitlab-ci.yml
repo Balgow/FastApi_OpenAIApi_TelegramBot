@@ -1,0 +1,164 @@
+variables:
+  TAG_LATEST: $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
+  TAG_COMMIT: $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:$CI_COMMIT_SHORT_SHA
+
+  STAGE_PORT: ''
+  PROD_PORT: ''
+
+  DOCKER_COMPOSE_FILE_STAGE: docker-compose-stage.yml
+  DOCKER_COMPOSE_PROJECT_STAGE: meetings-stage
+
+  DOCKER_COMPOSE_FILE_PROD: docker-compose-prod.yml
+  DOCKER_COMPOSE_PROJECT_PROD: meetings-prod
+
+  DOCKER_COMPOSE_FILE_LEAD_ADDER_BOT: docker-compose-lead-adder-bot.yml
+  DOCKER_COMPOSE_PROJECT_LEAD_ADDER_BOT: lead-adder-bot-prod
+
+  DOCKER_COMPOSE_FILE_MEETING_ARRANGER_BOT: docker-compose-meeting-arranger-bot.yml
+  DOCKER_COMPOSE_PROJECT_MEETING_ARRANGER_BOT: meeting-arranger-bot-prod
+
+  DOCKER_COMPOSE_FILE_MARKETING_MEETING_ARRANGER_BOT: docker-compose-marketing-meeting-arranger-bot.yml
+  DOCKER_COMPOSE_PROJECT_MARKETING_MEETING_ARRANGER_BOT: marketing-meeting-arranger-bot-prod
+stages:
+  - build
+  - deploy
+
+.build:template:
+  stage: build
+  services:
+    - docker:dind
+  before_script:
+    - printenv
+  only:
+    - main
+  when: manual
+
+.deploy:template:
+  stage: deploy
+  before_script:
+    - printenv
+  only:
+    - main
+  when: manual
+
+build_fastapi:
+  extends:
+    - .build:template
+  script:
+    - docker build -t $TAG_COMMIT -t $TAG_LATEST ./fastapi
+    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+    - docker push $TAG_COMMIT
+    - docker push $TAG_LATEST
+
+build_lead_adder_telebot:
+  extends:
+    - .build:template
+  script:
+    - docker build -t $TAG_COMMIT -t $TAG_LATEST ./projects/telebot_lead_adder
+    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+    - docker push $TAG_COMMIT
+    - docker push $TAG_LATEST
+
+build_meeting_arranger_telebot:
+  extends:
+    - .build:template
+  script:
+    - docker build -t $TAG_COMMIT -t $TAG_LATEST ./projects/telebot_meeting_arranger
+    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+    - docker push $TAG_COMMIT
+    - docker push $TAG_LATEST
+
+build_marketing_meeting_arranger_telebot:
+  extends:
+    - .build:template
+  script:
+    - docker build -t $TAG_COMMIT -t $TAG_LATEST ./projects/telebot_marketing_meeting_arranger
+    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+    - docker push $TAG_COMMIT
+    - docker push $TAG_LATEST
+
+deploy_marketing_meeting_arranger_telebot:
+  extends:
+    - .deploy:template
+  script:
+    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+    - IMAGE_APP_TAG=$TAG_COMMIT docker compose -f $DOCKER_COMPOSE_FILE_MARKETING_MEETING_ARRANGER_BOT -p $DOCKER_COMPOSE_PROJECT_MARKETING_MEETING_ARRANGER_BOT up -d
+    - IMAGE_APP_TAG=$TAG_COMMIT docker compose -f $DOCKER_COMPOSE_FILE_MARKETING_MEETING_ARRANGER_BOT -p $DOCKER_COMPOSE_PROJECT_MARKETING_MEETING_ARRANGER_BOT pull
+  environment:
+    name: marketing-meeting-arranger-bot
+
+deploy_meeting_arranger_telebot:
+  extends:
+    - .deploy:template
+  script:
+    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+    - IMAGE_APP_TAG=$TAG_COMMIT docker compose -f $DOCKER_COMPOSE_FILE_MEETING_ARRANGER_BOT -p $DOCKER_COMPOSE_PROJECT_MEETING_ARRANGER_BOT up -d
+    - IMAGE_APP_TAG=$TAG_COMMIT docker compose -f $DOCKER_COMPOSE_FILE_MEETING_ARRANGER_BOT -p $DOCKER_COMPOSE_PROJECT_MEETING_ARRANGER_BOT pull
+  environment:
+    name: meeting-arranger-bot
+
+stop_meeting_arranger_telebot:
+  extends:
+    - .deploy:template
+  script:
+    - IMAGE_APP_TAG=$TAG_COMMIT docker compose -f $DOCKER_COMPOSE_FILE_MEETING_ARRANGER_BOT -p $DOCKER_COMPOSE_PROJECT_MEETING_ARRANGER_BOT down
+  environment:
+    name: meeting-arranger-bot
+    action: stop
+
+deploy_lead_adder_telebot:
+  extends:
+    - .deploy:template
+  script:
+    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+    - IMAGE_APP_TAG=$TAG_COMMIT docker compose -f $DOCKER_COMPOSE_FILE_LEAD_ADDER_BOT -p $DOCKER_COMPOSE_PROJECT_LEAD_ADDER_BOT up -d
+    - IMAGE_APP_TAG=$TAG_COMMIT docker compose -f $DOCKER_COMPOSE_FILE_LEAD_ADDER_BOT -p $DOCKER_COMPOSE_PROJECT_LEAD_ADDER_BOT pull
+  environment:
+    name: lead-adder-bot
+
+stop_lead_adder_telebot:
+  extends:
+    - .deploy:template
+  script:
+    - IMAGE_APP_TAG=$TAG_COMMIT docker compose -f $DOCKER_COMPOSE_FILE_LEAD_ADDER_BOT -p $DOCKER_COMPOSE_PROJECT_LEAD_ADDER_BOT down
+  environment:
+    name: lead-adder-bot
+    action: stop
+
+deploy_stage:
+  extends:
+    - .deploy:template
+  script:
+    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+    - IMAGE_APP_TAG=$TAG_COMMIT PORT=$STAGE_PORT docker compose -f $DOCKER_COMPOSE_FILE_STAGE -p $DOCKER_COMPOSE_PROJECT_STAGE pull
+    - IMAGE_APP_TAG=$TAG_COMMIT PORT=$STAGE_PORT docker compose -f $DOCKER_COMPOSE_FILE_STAGE -p $DOCKER_COMPOSE_PROJECT_STAGE up -d
+  environment:
+    name: staging
+
+deploy_prod:
+  extends:
+    - .deploy:template
+  script:
+    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+    - IMAGE_APP_TAG=$TAG_COMMIT PORT=$PROD_PORT docker compose -f $DOCKER_COMPOSE_FILE_PROD -p $DOCKER_COMPOSE_PROJECT_PROD pull
+    - IMAGE_APP_TAG=$TAG_COMMIT PORT=$PROD_PORT docker compose -f $DOCKER_COMPOSE_FILE_PROD -p $DOCKER_COMPOSE_PROJECT_PROD up -d
+  environment:
+    name: production
+
+stop_stage:
+  extends:
+    - .deploy:template
+  script:
+    - IMAGE_APP_TAG=$TAG_COMMIT PORT=$STAGE_PORT docker compose -f $DOCKER_COMPOSE_FILE_STAGE -p $DOCKER_COMPOSE_PROJECT_STAGE down
+  environment:
+    name: staging
+    action: stop
+
+stop_prod:
+  extends:
+    - .deploy:template
+  script:
+    - IMAGE_APP_TAG=$TAG_COMMIT PORT=$PROD_PORT docker compose -f $DOCKER_COMPOSE_FILE_PROD -p $DOCKER_COMPOSE_PROJECT_PROD down
+  environment:
+    name: staging
+    action: stop

@@ -1,0 +1,42 @@
+version: '3' 
+
+services:
+  app:
+    image: ${IMAGE_APP_TAG}
+    ports:
+      - '${PORT}:8000'
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/meetings
+    networks:
+      - meetings-prod
+    depends_on:
+      - db
+    deploy:
+      restart_policy:
+        condition: on-failure
+    healthcheck:
+      test: curl -sS http://127.0.0.1:8000/docs || echo 1
+      interval: 5s
+      timeout: 10s
+      retries: 3
+
+  db:
+    image: postgres:15.4
+    volumes:
+      - meetings_postgres_data_prod:/var/lib/postgresql/data/
+    expose:
+      - 5432
+    ports:
+      - '8213:5432'
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=meetings
+    networks:
+      - meetings-prod
+
+networks:
+  meetings-prod:
+
+volumes:
+  meetings_postgres_data_prod:
